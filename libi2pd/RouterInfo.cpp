@@ -1028,6 +1028,18 @@ namespace data
 		return true;
 	}
 
+	std::string RouterInfo::PrintAllAddresses() const
+	{
+		std::string res = "";
+		for (auto& a: GetAllHostAddresses())
+		{
+			auto s = a.to_string();
+			if (s != "0.0.0.0")
+				res += a.to_string();
+		}
+		return res;
+	}
+
 	std::vector<boost::asio::ip::address> RouterInfo::GetAllHostAddresses () const
 	{
 		std::vector<boost::asio::ip::address> result(static_cast<int>(eNumTransports));

@@ -950,14 +950,15 @@ namespace tunnel
 			}
 		}
 
-		if (m_OutboundTunnels.size () < 3)
+		if (!data::netdb.StrictHops() && m_OutboundTunnels.size () < 3)
 		{
+			Path emptyPath;
 			// trying to create one more outbound tunnel
 			auto inboundTunnel = GetNextInboundTunnel ();
 			auto inUse = GetAllRoutersInUse();
 			auto router = i2p::transport::transports.RoutesRestricted() ?
 				i2p::transport::transports.GetRestrictedPeer() :
-				i2p::data::netdb.GetRandomRouter (i2p::context.GetSharedRouterInfo (), false, true, false, inUse); // reachable by us
+				i2p::data::netdb.GetRandomRouter (i2p::context.GetSharedRouterInfo (), false, true, false, inUse, emptyPath); // reachable by us
 			if (!inboundTunnel || !router) return;
 			LogPrint (eLogDebug, "Tunnel: Creating one hop outbound tunnel");
 			CreateTunnel<OutboundTunnel> (
@@ -1020,14 +1021,15 @@ namespace tunnel
 			return;
 		}
 
-		if (m_OutboundTunnels.empty () || m_InboundTunnels.size () < 3)
+		if (!data::netdb.StrictHops() && (m_OutboundTunnels.empty () || m_InboundTunnels.size () < 3))
 		{
+			Path emptyPath;
 			auto inUse = GetAllRoutersInUse();
 			// trying to create one more inbound tunnel
 			auto router = i2p::transport::transports.RoutesRestricted() ?
 				i2p::transport::transports.GetRestrictedPeer() :
 				// should be reachable by us because we send build request directly
-				i2p::data::netdb.GetRandomRouter (i2p::context.GetSharedRouterInfo (), false, true, false, inUse);
+				i2p::data::netdb.GetRandomRouter (i2p::context.GetSharedRouterInfo (), false, true, false, inUse, emptyPath);
 			if (!router) {
 				LogPrint (eLogWarning, "Tunnel: Can't find any router, skip creating tunnel");
 				return;

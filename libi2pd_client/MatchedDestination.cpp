@@ -75,7 +75,7 @@ namespace client
 		auto pool = GetTunnelPool();
 		if(!pool || !pool->StandardSelectPeers(path, hops, inbound,
 			std::bind(&i2p::tunnel::TunnelPool::SelectNextHop, pool, std::placeholders::_1, 
-				std::placeholders::_2, std::placeholders::_3)))
+				std::placeholders::_2, std::placeholders::_3, std::placeholders::_4)))
 			return false;
 		// more here for outbound tunnels
 		if(!inbound && m_RemoteLeaseSet)

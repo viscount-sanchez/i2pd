@@ -82,7 +82,9 @@ namespace config {
 			("close", value<std::string>()->default_value("ask"),             "Action on close: minimize, exit, ask")
 #endif
 			("stan", bool_switch()->default_value(false), 					  "Router has limited connectivity (default: false)")
-		    ("unique", bool_switch()->default_value(false),                    "Do not use same router id & host more than once across all tunnels")
+		    ("unique", bool_switch()->default_value(true),                    "Do not use same router id & host more than once across all tunnels")
+		    ("restrictSubnets", bool_switch()->default_value(true),           "Do not build tunnels with routers in the same subnet (/24)")
+		("strictHops", bool_switch()->default_value(true),           "Do not use 1-hop when not asked")
 		;
 
 		options_description limits("Limits options");

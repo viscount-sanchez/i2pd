@@ -47,6 +47,9 @@ namespace tunnel
 
 		void Add (std::shared_ptr<const i2p::data::RouterInfo> r);
 		void Reverse ();
+
+		bool IsSameSubnet(const std::shared_ptr<const data::IdentityEx>& ident) const;
+		bool IsSameSubnet (const std::shared_ptr<const i2p::data::RouterInfo>& r) const;
 	};
 
 	/** interface for custom tunnel peer selection algorithm */
@@ -58,7 +61,7 @@ namespace tunnel
 
 	class TunnelPool: public std::enable_shared_from_this<TunnelPool> // per local destination
 	{
-		typedef std::function<std::shared_ptr<const i2p::data::RouterInfo>(std::shared_ptr<const i2p::data::RouterInfo>, bool, bool)> SelectHopFunc;
+		typedef std::function<std::shared_ptr<const i2p::data::RouterInfo>(std::shared_ptr<const i2p::data::RouterInfo>, bool, bool, Path&)> SelectHopFunc;
 		public:
 
 			TunnelPool (int numInboundHops, int numOutboundHops, int numInboundTunnels,
@@ -117,7 +120,7 @@ namespace tunnel
 			std::shared_ptr<OutboundTunnel> GetLowestLatencyOutboundTunnel(std::shared_ptr<OutboundTunnel> exclude = nullptr) const;
 
 			// for overriding tunnel peer selection
-			std::shared_ptr<const i2p::data::RouterInfo> SelectNextHop (std::shared_ptr<const i2p::data::RouterInfo> prevHop, bool reverse, bool endpoint) const;
+			std::shared_ptr<const i2p::data::RouterInfo> SelectNextHop (std::shared_ptr<const i2p::data::RouterInfo> prevHop, bool reverse, bool endpoint, Path& currentPath) const;
 			bool StandardSelectPeers(Path & path, int numHops, bool inbound, SelectHopFunc nextHop);
 
 		private:

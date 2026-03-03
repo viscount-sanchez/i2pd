@@ -64,12 +64,13 @@ namespace data
 		}
 
 		util::RoutersInUse noRouters;
+		tunnel::Path emptyPath;
 		uint16_t threshold; i2p::config::GetOption("reseed.threshold", threshold);
 		if (m_RouterInfos.size () < threshold || m_Floodfills.GetSize () < NETDB_MIN_FLOODFILLS) // reseed if # of router less than threshold or too few floodfiils
 		{
 			Reseed ();
 		}
-		else if (!GetRandomRouter (i2p::context.GetSharedRouterInfo (), false, false, false, noRouters))
+		else if (!GetRandomRouter (i2p::context.GetSharedRouterInfo (), false, false, false, noRouters, emptyPath))
 			Reseed (); // we don't have a router we can connect to. Trying to reseed
 
 		auto it = m_RouterInfos.find (i2p::context.GetIdentHash ());
@@ -86,6 +87,8 @@ namespace data
 
 		i2p::config::GetOption("persist.profiles", m_PersistProfiles);
 		i2p::config::GetOption("unique", m_uniqueOnly);
+		i2p::config::GetOption("restrictSubnets", m_restrictSubnets);
+		i2p::config::GetOption("strictHops", m_strictHops);
 
 		m_IsRunning = true;
 		m_Thread = new std::thread (std::bind (&NetDb::Run, this));
@@ -255,7 +258,7 @@ namespace data
 			{
 				bool wasFloodfill = r->IsFloodfill ();
 				{
-					std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+					std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 					if (!r->Update (buf, len))
 					{
 						updated = false;
@@ -317,7 +320,7 @@ namespace data
 			{
 				bool inserted = false;
 				{
-					std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+					std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 					inserted = m_RouterInfos.insert ({r->GetIdentHash (), r}).second;
 				}
 				if (inserted)
@@ -422,7 +425,7 @@ namespace data
 
 	std::shared_ptr<RouterInfo> NetDb::FindRouter (const IdentHash& ident) const
 	{
-		std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+		std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 		auto it = m_RouterInfos.find (ident);
 		if (it != m_RouterInfos.end ())
 			return it->second;
@@ -476,7 +479,7 @@ namespace data
 		auto r = FindRouter (ident);
 		if (r)
 		{
-			std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+			std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 			r->ExcludeReachableTransports (transports);
 		}
 	}
@@ -561,7 +564,7 @@ namespace data
 
 	void NetDb::VisitRouterInfos(RouterInfoVisitor v)
 	{
-		std::lock_guard<std::mutex> lock(m_RouterInfosMutex);
+		std::lock_guard<std::recursive_mutex> lock(m_RouterInfosMutex);
 		for ( const auto & item : m_RouterInfos )
 			v(item.second);
 	}
@@ -573,7 +576,7 @@ namespace data
 		size_t iters = max_iters_per_cyle;
 		while(n > 0)
 		{
-			std::lock_guard<std::mutex> lock(m_RouterInfosMutex);
+			std::lock_guard<std::recursive_mutex> lock(m_RouterInfosMutex);
 			uint32_t idx = m_Rng () % m_RouterInfos.size ();
 			uint32_t i = 0;
 			for (const auto & it : m_RouterInfos) {
@@ -665,7 +668,7 @@ namespace data
 			if (!r || r == own) continue; // skip own
 			if (r->IsBufferScheduledToDelete ()) // from previous SaveUpdated, we assume m_PersistingRouters complete
 			{
-				std::lock_guard<std::mutex> l(m_RouterInfosMutex); // possible collision between DeleteBuffer and Update
+				std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex); // possible collision between DeleteBuffer and Update
 				r->DeleteBuffer ();
 			}
 			if (r->IsUpdated ())
@@ -675,7 +678,7 @@ namespace data
 					// we have something to save
 					std::shared_ptr<RouterInfo::Buffer> buffer;
 					{
-						std::lock_guard<std::mutex> l(m_RouterInfosMutex); // possible collision between DeleteBuffer and Update
+						std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex); // possible collision between DeleteBuffer and Update
 						buffer = r->CopyBuffer ();
 					}
 					if (!i2p::transport::transports.IsConnected (ident))
@@ -753,7 +756,7 @@ namespace data
 			LogPrint (eLogInfo, "NetDb: Deleting ", deletedCount, " unreachable routers");
 			// clean up RouterInfos table
 			{
-				std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+				std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 				for (auto it = m_RouterInfos.begin (); it != m_RouterInfos.end ();)
 				{
 					if (!it->second || it->second->IsUnreachable ())
@@ -1158,27 +1161,30 @@ namespace data
 		return candidate;
 	}
 
-	std::shared_ptr<RouterInfo> NetDb::GetRandomRouter (util::RoutersInUse& inUse) const
+	std::shared_ptr<RouterInfo> NetDb::GetRandomRouter (util::RoutersInUse& inUse, tunnel::Path& currentPath) const
 	{
 		uint64_t currentMillis = util::GetMillisecondsSinceEpoch ();
 		bool uniqueOnly = OnlyUniqueHosts();
+		bool restrictSubnets = RestrictSubnets();
 		return RecheckRouterTs(GetRandomRouter (
-			[inUse, currentMillis, uniqueOnly](const std::shared_ptr<const RouterInfo>& router)->bool
+			[inUse, currentMillis, uniqueOnly, currentPath, restrictSubnets](const std::shared_ptr<const RouterInfo>& router)->bool
 			{
 				return !router->IsHidden () &&
-					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse)));
+					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse))) &&
+					(!restrictSubnets || !currentPath.IsSameSubnet(router));
 			}), currentMillis);
 	}
 
 	std::shared_ptr<RouterInfo> NetDb::GetRandomRouter (std::shared_ptr<const RouterInfo> compatibleWith,
-		bool reverse, bool endpoint, bool clientTunnel, util::RoutersInUse& inUse) const
+		bool reverse, bool endpoint, bool clientTunnel, util::RoutersInUse& inUse, tunnel::Path& currentPath) const
 	{
 		bool checkIsReal = clientTunnel && i2p::tunnel::tunnels.GetPreciseTunnelCreationSuccessRate () < NETDB_TUNNEL_CREATION_RATE_THRESHOLD && // too low rate
 			context.GetUptime () > NETDB_CHECK_FOR_EXPIRATION_UPTIME; // after 10 minutes uptime
 		uint64_t currentMillis = util::GetMillisecondsSinceEpoch ();
 		bool uniqueOnly = OnlyUniqueHosts();
+		bool restrictSubnets = RestrictSubnets();
 		return RecheckRouterTs(GetRandomRouter (
-			[compatibleWith, reverse, endpoint, clientTunnel, checkIsReal, inUse, uniqueOnly, currentMillis](const std::shared_ptr<const RouterInfo>& router)->bool
+			[compatibleWith, reverse, endpoint, clientTunnel, checkIsReal, inUse, uniqueOnly, currentMillis, currentPath, restrictSubnets](const std::shared_ptr<const RouterInfo>& router)->bool
 			{
 				return !router->IsHidden () && router != compatibleWith &&
 					(reverse ? (compatibleWith->IsReachableFrom (*router) && router->GetCompatibleTransports (true)):
@@ -1188,7 +1194,8 @@ namespace data
 					(!i2p::transport::transports.IsCheckReserved () || !router->IsSameSubnet (*compatibleWith)) &&
 					(!checkIsReal || router->GetProfile ()->IsReal ()) &&
 					(!endpoint || (router->IsV4 () && (!reverse || router->IsPublished (true)))) && // endpoint must be ipv4 and published if inbound(reverse)
-					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse)));
+					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse))) &&
+					(!restrictSubnets || !currentPath.IsSameSubnet(router));
 			}), currentMillis);
 	}
 
@@ -1213,14 +1220,15 @@ namespace data
 	}
 
 	std::shared_ptr<RouterInfo> NetDb::GetHighBandwidthRandomRouter (std::shared_ptr<const RouterInfo> compatibleWith,
-		bool reverse, bool endpoint, util::RoutersInUse& inUse) const
+		bool reverse, bool endpoint, util::RoutersInUse& inUse, tunnel::Path& currentPath) const
 	{
 		bool checkIsReal = i2p::tunnel::tunnels.GetPreciseTunnelCreationSuccessRate () < NETDB_TUNNEL_CREATION_RATE_THRESHOLD && // too low rate
 			context.GetUptime () > NETDB_CHECK_FOR_EXPIRATION_UPTIME; // after 10 minutes uptime
 		uint64_t currentMillis = util::GetMillisecondsSinceEpoch ();
 		bool uniqueOnly = OnlyUniqueHosts();
+		bool restrictSubnets = RestrictSubnets();
 		return RecheckRouterTs(GetRandomRouter (
-			[compatibleWith, reverse, endpoint, checkIsReal, inUse, uniqueOnly, currentMillis](const std::shared_ptr<RouterInfo>& router)->bool
+			[compatibleWith, reverse, endpoint, checkIsReal, inUse, uniqueOnly, currentMillis, currentPath, restrictSubnets](const std::shared_ptr<RouterInfo>& router)->bool
 			{
 				return !router->IsHidden () && router != compatibleWith &&
 					(reverse ? (compatibleWith->IsReachableFrom (*router) && router->GetCompatibleTransports (true)) :
@@ -1231,7 +1239,8 @@ namespace data
 					(!i2p::transport::transports.IsCheckReserved () || !router->IsSameSubnet (*compatibleWith)) &&
 					(!checkIsReal || router->GetProfile ()->IsReal ()) &&
 					(!endpoint || (router->IsV4 () && (!reverse || router->IsPublished (true)))) && // endpoint must be ipv4 and published if inbound(reverse)
-					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse)));
+					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse))) &&
+					(!restrictSubnets || !currentPath.IsSameSubnet(router));
 			}), currentMillis);
 	}
 
@@ -1242,7 +1251,7 @@ namespace data
 			return nullptr;
 		uint16_t inds[3];
 		RAND_bytes ((uint8_t *)inds, sizeof (inds));
-		std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+		std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 		auto count = m_RouterInfos.size ();
 		if(count == 0) return nullptr;
 		inds[0] %= count;
@@ -1368,7 +1377,7 @@ namespace data
 			{
 				// collect eligible from current netdb
 				bool checkIsReal = i2p::tunnel::tunnels.GetPreciseTunnelCreationSuccessRate () < NETDB_TUNNEL_CREATION_RATE_THRESHOLD; // too low rate
-				std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+				std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 				for (const auto& it: m_RouterInfos)
 					if (!it.second->IsDeclaredFloodfill () &&
 					 	(!checkIsReal || (it.second->HasProfile () && it.second->GetProfile ()->IsReal ())))
@@ -1403,7 +1412,7 @@ namespace data
 	{
 		auto ts = i2p::util::GetSecondsSinceEpoch ();
 		{
-			std::lock_guard<std::mutex> l(m_RouterInfosMutex);
+			std::lock_guard<std::recursive_mutex> l(m_RouterInfosMutex);
 			for (auto& it: m_RouterInfos)
 				it.second->UpdateIntroducers (ts);
 		}

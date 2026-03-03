@@ -322,7 +322,7 @@ namespace tunnel
 			int m_TunnelCreationAttemptsNum;
 			std::mt19937 m_Rng;
 			TransitTunnels m_TransitTunnels;
-			
+
 		public:
 
 			// for HTTP only

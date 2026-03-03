@@ -40,6 +40,42 @@ namespace tunnel
 		std::reverse (peers.begin (), peers.end ());
 	}
 
+	bool Path::IsSameSubnet(const std::shared_ptr<const data::IdentityEx>& ident) const
+	{
+		if (ident && ident.get())
+		{
+			auto routerToCheck = data::netdb.FindRouter(ident->GetIdentHash());
+			if (routerToCheck && routerToCheck.get() && IsSameSubnet(routerToCheck))
+				return true;
+		}
+		return false;
+	}
+
+	bool Path::IsSameSubnet (const std::shared_ptr<const i2p::data::RouterInfo>& routerToCheck) const
+	{
+		if (!routerToCheck || !routerToCheck.get())
+			return false;
+
+		// LogPrint(eLogDebug, "(unique_only) routerToCheck ", routerToCheck->PrintAllAddresses());
+		for (auto& p: peers)
+		{
+			if (!p || !p.get())
+				continue;
+			auto routerPresent = data::netdb.FindRouter(p->GetIdentHash());
+			// if (routerPresent && routerPresent.get())
+			// {
+				// LogPrint(eLogDebug, "(unique_only) routerPresent ", routerPresent->PrintAllAddresses());
+			// }
+			if (routerPresent && routerPresent.get() && routerPresent->IsSameSubnet(*routerToCheck.get()))
+			{
+				LogPrint(eLogInfo, "(unique_only) Same subnet, filtered");
+				return true;
+			}
+
+		}
+		return false;
+	}
+
 	TunnelPool::TunnelPool (int numInboundHops, int numOutboundHops, int numInboundTunnels,
 		int numOutboundTunnels, int inboundVariance, int outboundVariance, bool isHighBandwidth):
 		m_NumInboundHops (numInboundHops), m_NumOutboundHops (numOutboundHops),
@@ -564,7 +600,7 @@ namespace tunnel
 	}
 
 	std::shared_ptr<const i2p::data::RouterInfo> TunnelPool::SelectNextHop (std::shared_ptr<const i2p::data::RouterInfo> prevHop,
-		bool reverse, bool endpoint) const
+		bool reverse, bool endpoint, Path& currentPath) const
 	{
 		auto inUse = tunnels.GetAllRoutersInUse();
 		bool tryClient = !IsExploratory () && !i2p::context.IsLimitedConnectivity ();
@@ -573,9 +609,9 @@ namespace tunnel
 		{
 			hop = tryClient ?
 				(m_IsHighBandwidth ?
-					i2p::data::netdb.GetHighBandwidthRandomRouter (prevHop, reverse, endpoint, inUse) :
-					i2p::data::netdb.GetRandomRouter (prevHop, reverse, endpoint, true, inUse)):
-				i2p::data::netdb.GetRandomRouter (prevHop, reverse, endpoint, false, inUse);
+					i2p::data::netdb.GetHighBandwidthRandomRouter (prevHop, reverse, endpoint, inUse, currentPath) :
+					i2p::data::netdb.GetRandomRouter (prevHop, reverse, endpoint, true, inUse, currentPath)):
+				i2p::data::netdb.GetRandomRouter (prevHop, reverse, endpoint, false, inUse, currentPath);
 			if (hop)
 			{
 				if (!hop->HasProfile () || !hop->GetProfile ()->IsBad ())
@@ -608,7 +644,7 @@ namespace tunnel
 			(inbound && (i2p::transport::transports.GetNumPeers () > 25 ||
             (i2p::context.IsLimitedConnectivity () && i2p::transport::transports.GetNumPeers () > 0))))
 		{
-			auto r = i2p::transport::transports.GetRandomPeer (m_IsHighBandwidth && !i2p::context.IsLimitedConnectivity (), inUse);
+			auto r = i2p::transport::transports.GetRandomPeer (m_IsHighBandwidth && !i2p::context.IsLimitedConnectivity (), inUse, path);
 			if (r && r->IsECIES () && (!r->HasProfile () || !r->GetProfile ()->IsBad ()) &&
 				(numHops > 1 || (r->IsV4 () && (!inbound || r->IsPublished (true))))) // first inbound must be published ipv4
 			{
@@ -620,11 +656,11 @@ namespace tunnel
 
 		for(int i = start; i < numHops; i++ )
 		{
-			auto hop = nextHop (prevHop, inbound, i == numHops - 1);
+			auto hop = nextHop (prevHop, inbound, i == numHops - 1, path);
 			if (!hop && !i) // if no suitable peer found for first hop, try already connected
 			{
 				LogPrint (eLogInfo, "Tunnels: Can't select first hop for a tunnel. Trying already connected");
-				hop = i2p::transport::transports.GetRandomPeer (false, inUse);
+				hop = i2p::transport::transports.GetRandomPeer (false, inUse, path);
 				if (hop && !hop->IsECIES ()) hop = nullptr;
 			}
 			if (!hop)
@@ -674,7 +710,7 @@ namespace tunnel
 				return m_CustomPeerSelector->SelectPeers(path, numHops, isInbound);
 		}
 		return StandardSelectPeers(path, numHops, isInbound, std::bind(&TunnelPool::SelectNextHop, this,
-			std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+			std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
 	}
 
 	bool TunnelPool::SelectExplicitPeers (Path& path, bool isInbound)

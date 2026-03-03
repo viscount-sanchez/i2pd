@@ -1218,17 +1218,19 @@ namespace transport
 		return candidate;
 	}
 
-	std::shared_ptr<i2p::data::RouterInfo> Transports::GetRandomPeer (bool isHighBandwidth, util::RoutersInUse& inUse) const
+	std::shared_ptr<i2p::data::RouterInfo> Transports::GetRandomPeer (bool isHighBandwidth, util::RoutersInUse& inUse, const tunnel::Path& currentPath) const
 	{
 		uint64_t currentMillis = util::GetMillisecondsSinceEpoch ();
 		return recheck(GetRandomPeer (
-			[isHighBandwidth](const std::shared_ptr<Peer>& peer)->bool
+			[isHighBandwidth, inUse, currentPath](const std::shared_ptr<Peer>& peer)->bool
 			{
 				// connected, not overloaded and not slow
 				return !peer->router && peer->IsConnected () && peer->isEligible &&
 					peer->sessions.front ()->GetSendQueueSize () <= PEER_ROUTER_INFO_OVERLOAD_QUEUE_SIZE &&
 					!peer->sessions.front ()->IsSlow () && !peer->sessions.front ()->IsBandwidthExceeded (peer->isHighBandwidth) &&
-					(!isHighBandwidth || peer->isHighBandwidth);
+					(!isHighBandwidth || peer->isHighBandwidth) &&
+					(!netdb.OnlyUniqueHosts() || !inUse.IdentHashesBase64.count(peer->sessions.front()->GetIdentHashBase64())) &&
+					(!netdb.RestrictSubnets() || !currentPath.IsSameSubnet(peer->sessions.front()->GetRemoteIdentity()));
 			}), currentMillis, inUse);
 	}
 

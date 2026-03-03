@@ -319,6 +319,7 @@ namespace data
 
 			std::shared_ptr<RouterProfile> GetProfile () const;
 			bool RecheckTsAndUpdate(uint64_t currentMillis);
+			std::string PrintAllAddresses() const;
 			std::vector<boost::asio::ip::address> GetAllHostAddresses() const;
 			bool IsMatch(const util::RoutersInUse& inUse) const;
 			bool IsOneOfHosts(std::set<boost::asio::ip::address>* addresses) const;

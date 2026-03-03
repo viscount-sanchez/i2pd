@@ -90,9 +90,9 @@ namespace data
 
 			void RequestDestination (const IdentHash& destination, RequestedDestination::RequestComplete requestComplete = nullptr, bool direct = true);
 
-			std::shared_ptr<RouterInfo> GetRandomRouter (util::RoutersInUse& inUse) const;
-			std::shared_ptr<RouterInfo> GetRandomRouter (std::shared_ptr<const RouterInfo> compatibleWith, bool reverse, bool endpoint, bool clientTunnel, util::RoutersInUse& inUse) const;
-			std::shared_ptr<RouterInfo> GetHighBandwidthRandomRouter (std::shared_ptr<const RouterInfo> compatibleWith, bool reverse, bool endpoint, util::RoutersInUse& inUse) const;
+			std::shared_ptr<RouterInfo> GetRandomRouter (util::RoutersInUse& inUse, tunnel::Path& currentPath) const;
+			std::shared_ptr<RouterInfo> GetRandomRouter (std::shared_ptr<const RouterInfo> compatibleWith, bool reverse, bool endpoint, bool clientTunnel, util::RoutersInUse& inUse, tunnel::Path& currentPath) const;
+			std::shared_ptr<RouterInfo> GetHighBandwidthRandomRouter (std::shared_ptr<const RouterInfo> compatibleWith, bool reverse, bool endpoint, util::RoutersInUse& inUse, tunnel::Path& currentPath) const;
 			std::shared_ptr<const RouterInfo> GetRandomSSU2PeerTestRouter (bool v4, const std::unordered_set<IdentHash>& excluded) const;
 			std::shared_ptr<const RouterInfo> GetRandomSSU2Introducer (bool v4, const std::unordered_set<IdentHash>& excluded) const;
 			std::shared_ptr<const RouterInfo> GetClosestFloodfill (const IdentHash& destination, const std::unordered_set<IdentHash>& excluded, bool nextDay = false) const;
@@ -143,6 +143,8 @@ namespace data
 			std::shared_ptr<RouterProfile> NewRouterProfile () { return m_RouterProfilesPool.AcquireSharedMt (); };
 
 			bool OnlyUniqueHosts () const { return m_uniqueOnly; };
+			bool RestrictSubnets () const { return m_restrictSubnets; };
+			bool StrictHops () const { return m_strictHops; };
 
 		private:
 
@@ -180,7 +182,7 @@ namespace data
 
 			mutable std::mutex m_LeaseSetsMutex;
 			std::unordered_map<IdentHash, std::shared_ptr<LeaseSet> > m_LeaseSets;
-			mutable std::mutex m_RouterInfosMutex;
+			mutable std::recursive_mutex m_RouterInfosMutex;
 			std::unordered_map<IdentHash, std::shared_ptr<RouterInfo> > m_RouterInfos;
 			mutable std::mutex m_FloodfillsMutex;
 			DHTTable m_Floodfills;
@@ -204,6 +206,9 @@ namespace data
 			std::mt19937 m_Rng;
 
 			bool m_uniqueOnly;
+			bool m_restrictSubnets;
+			bool m_strictHops;
+
 			std::shared_ptr<RouterInfo> RecheckRouterTs(std::shared_ptr<RouterInfo> candidate, uint64_t currentMillis) const;
 	};
 
