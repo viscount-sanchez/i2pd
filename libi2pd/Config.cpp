@@ -84,7 +84,7 @@ namespace config {
 			("stan", bool_switch()->default_value(false), 					  "Router has limited connectivity (default: false)")
 		    ("unique", bool_switch()->default_value(true),                    "Do not use same router id & host more than once across all tunnels")
 		    ("restrictSubnets", bool_switch()->default_value(true),           "Do not build tunnels with routers in the same subnet (/24)")
-			("strictHops", bool_switch()->default_value(true),                "Do not use 1-hop when not asked")
+			("strictHops", bool_switch()->default_value(true),                "Do not use 0-hop & 1-hop when not asked")
 			("onlyResolved", bool_switch()->default_value(true),              "Build tunnels only through routers with hostnames known")
 		;
 

@@ -1006,9 +1006,12 @@ namespace tunnel
 
 		if (m_InboundTunnels.empty ())
 		{
-			LogPrint (eLogDebug, "Tunnel: Creating zero hops inbound tunnel");
-			CreateZeroHopsInboundTunnel (nullptr);
-			CreateZeroHopsOutboundTunnel (nullptr);
+			if (!data::netdb.StrictHops())
+			{
+				LogPrint (eLogDebug, "Tunnel: Creating zero hops inbound tunnel");
+				CreateZeroHopsInboundTunnel (nullptr);
+				CreateZeroHopsOutboundTunnel (nullptr);
+			}
 			if (!m_ExploratoryPool)
 			{
 				int ibLen; i2p::config::GetOption("exploratory.inbound.length", ibLen);
@@ -1087,16 +1090,18 @@ namespace tunnel
 	{
 		if (config)
 			return CreateTunnel<InboundTunnel>(config, pool, outboundTunnel);
-		else
+		else if (!data::netdb.StrictHops())
 			return CreateZeroHopsInboundTunnel (pool);
+		return {nullptr};
 	}
 
 	std::shared_ptr<OutboundTunnel> Tunnels::CreateOutboundTunnel (std::shared_ptr<TunnelConfig> config, std::shared_ptr<TunnelPool> pool)
 	{
 		if (config)
 			return CreateTunnel<OutboundTunnel>(config, pool);
-		else
+		else if (!data::netdb.StrictHops())
 			return CreateZeroHopsOutboundTunnel (pool);
+		return {nullptr};
 	}
 
 	void Tunnels::AddPendingTunnel (uint32_t replyMsgID, std::shared_ptr<InboundTunnel> tunnel)
