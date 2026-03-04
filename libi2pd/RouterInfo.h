@@ -323,6 +323,7 @@ namespace data
 			std::vector<boost::asio::ip::address> GetAllHostAddresses() const;
 			bool IsMatch(const util::RoutersInUse& inUse) const;
 			bool IsOneOfHosts(std::set<boost::asio::ip::address>* addresses) const;
+			bool HasAddress() const;
 			void DropProfile () { m_Profile = nullptr; };
 			bool HasProfile () const { return (bool)m_Profile; };
 

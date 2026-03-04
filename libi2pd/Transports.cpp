@@ -1230,7 +1230,8 @@ namespace transport
 					!peer->sessions.front ()->IsSlow () && !peer->sessions.front ()->IsBandwidthExceeded (peer->isHighBandwidth) &&
 					(!isHighBandwidth || peer->isHighBandwidth) &&
 					(!netdb.OnlyUniqueHosts() || !inUse.IdentHashesBase64.count(peer->sessions.front()->GetIdentHashBase64())) &&
-					(!netdb.RestrictSubnets() || !currentPath.IsSameSubnet(peer->sessions.front()->GetRemoteIdentity()));
+					(!netdb.RestrictSubnets() || !currentPath.IsSameSubnet(peer->sessions.front()->GetRemoteIdentity())) &&
+					(!netdb.OnlyResolved() || peer->sessions.front()->HasAddress());
 			}), currentMillis, inUse);
 	}
 

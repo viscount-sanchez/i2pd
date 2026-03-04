@@ -1081,6 +1081,16 @@ namespace data
 		}) != nullptr;
 	}
 
+	bool RouterInfo::HasAddress() const
+	{
+		return GetAddress([](const std::shared_ptr<const Address>& address)->bool
+		{
+			if (address && address.get() && !address->host.is_unspecified() && address->published)
+				return true;
+			return false;
+		}) != nullptr;
+	}
+
 	void RouterInfo::Encrypt (const uint8_t * data, uint8_t * encrypted) const
 	{
 		auto encryptor = m_RouterIdentity->CreateEncryptor (nullptr);

@@ -145,6 +145,7 @@ namespace data
 			bool OnlyUniqueHosts () const { return m_uniqueOnly; };
 			bool RestrictSubnets () const { return m_restrictSubnets; };
 			bool StrictHops () const { return m_strictHops; };
+			bool OnlyResolved () const { return m_onlyResolved; };
 
 		private:
 
@@ -208,6 +209,7 @@ namespace data
 			bool m_uniqueOnly;
 			bool m_restrictSubnets;
 			bool m_strictHops;
+			bool m_onlyResolved;
 
 			std::shared_ptr<RouterInfo> RecheckRouterTs(std::shared_ptr<RouterInfo> candidate, uint64_t currentMillis) const;
 	};

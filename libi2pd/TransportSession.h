@@ -18,6 +18,7 @@
 #include "Crypto.h"
 #include "RouterInfo.h"
 #include "I2NPProtocol.h"
+#include "NetDb.hpp"
 #include "Timestamp.h"
 
 namespace i2p
@@ -158,6 +159,15 @@ namespace transport
 			virtual void SendI2NPMessages (std::list<std::shared_ptr<I2NPMessage> >& msgs) = 0;
 			virtual bool IsEstablished () const = 0;
 			virtual i2p::data::RouterInfo::SupportedTransports GetTransportType () const = 0;
+
+			bool HasAddress()
+			{
+				auto ident = GetRemoteIdentity();
+				if (!ident || !ident.get())
+					return false;
+				auto r = data::netdb.FindRouter(ident->GetIdentHash());
+				return r && r.get() && r->HasAddress();
+			}
 
 		private:
 

@@ -89,6 +89,7 @@ namespace data
 		i2p::config::GetOption("unique", m_uniqueOnly);
 		i2p::config::GetOption("restrictSubnets", m_restrictSubnets);
 		i2p::config::GetOption("strictHops", m_strictHops);
+		i2p::config::GetOption("onlyResolved", m_onlyResolved);
 
 		m_IsRunning = true;
 		m_Thread = new std::thread (std::bind (&NetDb::Run, this));
@@ -1166,12 +1167,14 @@ namespace data
 		uint64_t currentMillis = util::GetMillisecondsSinceEpoch ();
 		bool uniqueOnly = OnlyUniqueHosts();
 		bool restrictSubnets = RestrictSubnets();
+		bool onlyResolved = OnlyResolved();
 		return RecheckRouterTs(GetRandomRouter (
-			[inUse, currentMillis, uniqueOnly, currentPath, restrictSubnets](const std::shared_ptr<const RouterInfo>& router)->bool
+			[inUse, currentMillis, uniqueOnly, currentPath, restrictSubnets, onlyResolved](const std::shared_ptr<const RouterInfo>& router)->bool
 			{
 				return !router->IsHidden () &&
 					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse))) &&
-					(!restrictSubnets || !currentPath.IsSameSubnet(router));
+					(!restrictSubnets || !currentPath.IsSameSubnet(router)) &&
+					(!onlyResolved || router->HasAddress());
 			}), currentMillis);
 	}
 
@@ -1183,8 +1186,9 @@ namespace data
 		uint64_t currentMillis = util::GetMillisecondsSinceEpoch ();
 		bool uniqueOnly = OnlyUniqueHosts();
 		bool restrictSubnets = RestrictSubnets();
+		bool onlyResolved = OnlyResolved();
 		return RecheckRouterTs(GetRandomRouter (
-			[compatibleWith, reverse, endpoint, clientTunnel, checkIsReal, inUse, uniqueOnly, currentMillis, currentPath, restrictSubnets](const std::shared_ptr<const RouterInfo>& router)->bool
+			[compatibleWith, reverse, endpoint, clientTunnel, checkIsReal, inUse, uniqueOnly, currentMillis, currentPath, restrictSubnets, onlyResolved](const std::shared_ptr<const RouterInfo>& router)->bool
 			{
 				return !router->IsHidden () && router != compatibleWith &&
 					(reverse ? (compatibleWith->IsReachableFrom (*router) && router->GetCompatibleTransports (true)):
@@ -1195,7 +1199,8 @@ namespace data
 					(!checkIsReal || router->GetProfile ()->IsReal ()) &&
 					(!endpoint || (router->IsV4 () && (!reverse || router->IsPublished (true)))) && // endpoint must be ipv4 and published if inbound(reverse)
 					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse))) &&
-					(!restrictSubnets || !currentPath.IsSameSubnet(router));
+					(!restrictSubnets || !currentPath.IsSameSubnet(router)) &&
+					(!onlyResolved || router->HasAddress());
 			}), currentMillis);
 	}
 
@@ -1227,8 +1232,9 @@ namespace data
 		uint64_t currentMillis = util::GetMillisecondsSinceEpoch ();
 		bool uniqueOnly = OnlyUniqueHosts();
 		bool restrictSubnets = RestrictSubnets();
+		bool onlyResolved = OnlyResolved();
 		return RecheckRouterTs(GetRandomRouter (
-			[compatibleWith, reverse, endpoint, checkIsReal, inUse, uniqueOnly, currentMillis, currentPath, restrictSubnets](const std::shared_ptr<RouterInfo>& router)->bool
+			[compatibleWith, reverse, endpoint, checkIsReal, inUse, uniqueOnly, currentMillis, currentPath, restrictSubnets, onlyResolved](const std::shared_ptr<RouterInfo>& router)->bool
 			{
 				return !router->IsHidden () && router != compatibleWith &&
 					(reverse ? (compatibleWith->IsReachableFrom (*router) && router->GetCompatibleTransports (true)) :
@@ -1240,7 +1246,8 @@ namespace data
 					(!checkIsReal || router->GetProfile ()->IsReal ()) &&
 					(!endpoint || (router->IsV4 () && (!reverse || router->IsPublished (true)))) && // endpoint must be ipv4 and published if inbound(reverse)
 					(!uniqueOnly || (router->LastPickTs() + RANDOM_PICK_TIMEOUT_MS < currentMillis && !router->IsMatch(inUse))) &&
-					(!restrictSubnets || !currentPath.IsSameSubnet(router));
+					(!restrictSubnets || !currentPath.IsSameSubnet(router)) &&
+					(!onlyResolved || router->HasAddress());
 			}), currentMillis);
 	}
 
